@@ -29,6 +29,11 @@ def train_valid_split(data_set, valid_ratio, seed):
     train_data_size = len(data_set) - valid_data_size  # 训练集的大小
     train_data, valid_data = random_split(data_set, [
                                           train_data_size, valid_data_size], generator=torch.Generator().manual_seed(seed))
+
+
+# data_set：要划分的数据集。
+# [train_data_size, valid_data_size]：训练集和验证集的大小。
+# generator = torch.Generator().manual_seed(seed)：设置随机种子以确保划分结果一致。
     return list(train_data), list(valid_data)
 
 # 选择特征
@@ -48,7 +53,7 @@ def select_feat(train_data, valid_data, test_data, select_all=True):
     if select_all:
         feat_idx = list(range(raw_x_train.shape[1]))
     else:
-        feat_idx = [0, 1, 2, 3, 4]
+        feat_idx = [0, 1, 2, 3, 4] #以便后续修改，选择合适的特征
 
     return raw_x_train[:, feat_idx], raw_x_valid[:, feat_idx], raw_x_test[:, feat_idx], y_train, y_valid
 
@@ -56,7 +61,7 @@ def select_feat(train_data, valid_data, test_data, select_all=True):
 
 
 class COVID19Dataset(Dataset):
-    def __init__(self, features, targets=None):
+    def __init__(self, features, targets=None):#重写构造函数
         self.features = torch.FloatTensor(features)
         if targets is None:  # 做预测，测试集，只用 features
             self.targets = targets  # targets 即 lables
