@@ -118,14 +118,95 @@ def convert_to_excel(file_path, output_path=None):
     return False
 
 
+def check_material_data_format(file_path):
+    """检查金属材料数据文件的格式是否符合要求"""
+    print(f"检查材料数据文件格式: {file_path}")
+    
+    try:
+        # 尝试读取文件
+        encodings = ['utf-8', 'gbk', 'gb2312', 'iso-8859-1', 'latin1']
+        df = None
+        
+        for encoding in encodings:
+            try:
+                if file_path.lower().endswith('.csv'):
+                    df = pd.read_csv(file_path, encoding=encoding)
+                elif file_path.lower().endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(file_path)
+                break
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                print(f"尝试使用 {encoding} 编码读取时出错: {e}")
+        
+        if df is None:
+            print("无法读取文件，请检查文件格式或编码")
+            return False
+        
+        # 检查文件格式
+        print(f"数据形状: {df.shape}")
+        print(f"列数: {len(df.columns)}")
+        
+        # 检查独热编码列 (2-105)
+        onehot_cols = [str(i) for i in range(2, 106) if str(i) in df.columns]
+        print(f"发现独热编码列: {len(onehot_cols)} 列")
+        
+        # 检查属性列
+        expected_columns = ['颜色', '密度（g/cm3）', '温度', '电阻率', '电阻温度系数', 
+                           '比热容', '熔点', '沸点', '屈服强度', '抗拉强度', '延展率', 
+                           '热膨胀系数', '热值（J/kg）', '杨氏模量GPa', '硬度', 
+                           '疲劳强度', '冲击韧性J/cm2']
+        
+        found_columns = [col for col in expected_columns if col in df.columns]
+        print(f"发现属性列: {len(found_columns)}/{len(expected_columns)}")
+        print(f"找到的属性列: {found_columns}")
+        
+        missing_columns = [col for col in expected_columns if col not in df.columns]
+        if missing_columns:
+            print(f"警告: 缺少以下属性列: {missing_columns}")
+        
+        # 检查数据类型和缺失值
+        print("\n数据概览:")
+        print(df.dtypes)
+        
+        # 检查缺失值百分比
+        missing_percentages = (df.isnull().sum() / len(df)) * 100
+        columns_with_missing = missing_percentages[missing_percentages > 0]
+        
+        if not columns_with_missing.empty:
+            print("\n含有缺失值的列:")
+            for col, percentage in columns_with_missing.items():
+                print(f"{col}: {percentage:.2f}% 缺失")
+        else:
+            print("\n没有发现缺失值")
+        
+        # 预览数据
+        print("\n数据预览:")
+        print(df.head())
+        
+        return True
+    except Exception as e:
+        print(f"检查文件时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="文件编码检测和转换工具")
     parser.add_argument("--file", type=str, required=True, help="要检查的文件路径")
     parser.add_argument("--convert", action="store_true",
                         help="是否将CSV转换为Excel")
     parser.add_argument("--output", type=str, help="输出Excel文件路径(可选)")
+    parser.add_argument("--check-material", action="store_true",
+                        help="检查材料数据文件格式")
 
     args = parser.parse_args()
+
+    # 检查材料数据文件格式
+    if args.check_material:
+        check_material_data_format(args.file)
+        return
 
     # 检查文件编码
     success = detect_file_encoding(args.file)

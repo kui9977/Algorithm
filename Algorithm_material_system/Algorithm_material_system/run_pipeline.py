@@ -113,11 +113,50 @@ def main():
         print(f"数据形状: {df.shape}")
         print(f"数据列: {df.columns.tolist()}")
         print(f"数据预览:\n{df.head()}")
+        
+        # 处理标签 - 如果没有label列，则从独热编码创建
+        if 'label' not in df.columns:
+            # 检查是否有从2-105的列，这些是独热编码列
+            onehot_cols = [str(i) for i in range(2, 106) if str(i) in df.columns]
+            if onehot_cols:
+                print("从独热编码列创建标签...")
+                # 安全地处理独热编码创建标签
+                # 先处理可能的NaN值，将其填充为0
+                df[onehot_cols] = df[onehot_cols].fillna(0)
+                
+                # 找出每行中值为1的列的索引
+                label_series = df[onehot_cols].idxmax(axis=1)
+                
+                # 检查是否有无效行（所有值都是0或NaN）
+                invalid_rows = df[onehot_cols].sum(axis=1) == 0
+                if invalid_rows.any():
+                    print(f"警告: 发现{invalid_rows.sum()}行没有有效的类别编码（所有值都是0）")
+                    # 对于无效行，给它们分配一个特殊标签，比如-1
+                    label_series[invalid_rows] = '0'  # 使用'0'作为占位符
+                
+                # 转换为整数类型，减去2以得到0开始的标签
+                df['label'] = label_series.astype(int) - 2
+                print(f"创建了标签，唯一值: {df['label'].unique()}")
+                
+                # 移除特殊标签
+                if invalid_rows.any():
+                    df.loc[invalid_rows, 'label'] = -1
+                    print(f"为{invalid_rows.sum()}行分配了特殊标签-1")
+            else:
+                print("警告: 没有找到独热编码列，可能需要手动指定标签")
+        
     except Exception as e:
         print(f"加载数据文件时出错: {e}")
         import traceback
         traceback.print_exc()  # 打印详细的错误堆栈
         return
+
+    # 检查并显示标签分布
+    if 'label' in df.columns:
+        label_counts = df['label'].value_counts().sort_index()
+        print("\n标签分布:")
+        for label, count in label_counts.items():
+            print(f"标签 {label}: {count} 个样本")
 
     # 加载类别名称
     class_names = None
@@ -128,6 +167,17 @@ def main():
 
     # 训练模式
     if args.mode == 'train':
+        # 确保数据中有标签
+        if 'label' not in df.columns:
+            print("错误: 数据中没有'label'列，无法进行训练")
+            return
+        
+        # 移除标签为-1的数据行
+        if (df['label'] == -1).any():
+            invalid_count = (df['label'] == -1).sum()
+            df = df[df['label'] != -1]
+            print(f"移除了{invalid_count}行无效数据（标签为-1）")
+            
         # 创建预处理器
         preprocessor = MaterialDataPreprocessor()
 
@@ -140,11 +190,17 @@ def main():
         # 获取特征数量和类别数量
         num_colors = preprocessor.get_vocab_size()
         num_classes = len(df['label'].unique())
-        num_numerical_features = len(df.columns) - 2  # 减去颜色和标签列
+        # 数值特征数量，只计算除了名称、颜色、标签和独热编码之外的列
+        numerical_columns = [
+            col for col in df.columns if col not in ['名称', '颜色', 'label'] 
+            and col not in [str(i) for i in range(2, 106)]
+        ]
+        num_numerical_features = len(numerical_columns)
 
         print(f"颜色数量: {num_colors}")
         print(f"类别数量: {num_classes}")
         print(f"数值特征数量: {num_numerical_features}")
+        print(f"数值特征列: {numerical_columns}")
 
         # 创建模型
         model = MaterialAnalysisModel(

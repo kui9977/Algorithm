@@ -9,10 +9,17 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 import seaborn as sns
 from tqdm import tqdm
-
 from models.model import MaterialAnalysisModel
 from data.preprocessor import MaterialDataPreprocessor, create_dataloaders
 
+
+
+
+'''
+我想训练一个多模态模型，根据输入的金属材料的表征信息，包括：颜色、密度、对应温度下的电阻率和电阻温度系数、比热容、熔点、沸点、屈服强度、抗拉强度、延展率、热膨胀系数、热值、杨氏模量、硬度、疲劳强度、冲击韧性等，经过多模态模型预测，得出对应金属材料的种类以及常见用途等。现在请你告诉我如何搭建这个模型，为我提供一个框架。如果需要额外的数据支持，也请告诉我，我将为你提供数据。
+
+在数据集training_data.csv文件中，第2-105列是每种材料的独热编码，从106列往后依次是颜色、密度、温度、对应温度下的电阻率、电阻温度系数、比热容、熔点、沸点、屈服强度、抗拉强度、延展率、热膨胀系数、热值、杨氏模量、硬度、疲劳强度、冲击韧性，改写代码，使得文件读写无误
+'''
 
 class EarlyStopping:
     def __init__(self, patience=5, min_delta=0):
@@ -161,6 +168,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         print(f'Epoch {epoch+1}/{num_epochs}:')
         print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
         print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
+        print(f"Epoch {epoch+1}: Train Loss = {train_loss:.4f}, Train Acc = {train_acc:.4f}")
+        print(f"Epoch {epoch+1}: Val Loss = {val_loss:.4f}, Val Acc = {val_acc:.4f}")
 
         # 保存最佳模型
         if val_acc > best_val_acc:
@@ -171,7 +180,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
         # 早停检查
         early_stopping(val_loss)
         if early_stopping.early_stop:
-            print('Early stopping!')
+            print(f"触发早停，在 Epoch {epoch+1} 停止训练")
             break
 
     # 绘制训练过程
@@ -198,70 +207,87 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, scheduler
 
 def evaluate_model(model, test_loader, criterion, device='cuda', class_names=None):
     """
-    在测试集上评估模型
-
+    在测试集上评估模型性能
+    
     参数:
-        model: 要评估的模型
+        model: 训练好的模型
         test_loader: 测试数据加载器
         criterion: 损失函数
         device: 使用的计算设备(GPU/CPU)
-        class_names: 类别名称列表（可选）
-
+        class_names: 类别名称列表 (可选)
+        
     返回:
-        准确率, F1分数, 混淆矩阵
+        accuracy: 准确率
+        f1: F1 分数
+        conf_matrix: 混淆矩阵
     """
-    # 将模型移到指定设备
-    model = model.to(device)
     model.eval()
-
+    total_loss = 0.0
     all_preds = []
     all_labels = []
-    test_loss = 0.0
-
+    
     with torch.no_grad():
-        for color_idx, numerical, labels in tqdm(test_loader, desc='Evaluating'):
+        for color_idx, numerical, labels in tqdm(test_loader, desc="评估模型"):
             # 将数据移到指定设备
             color_idx = color_idx.to(device)
             numerical = numerical.to(device)
             labels = labels.to(device)
-
+            
             # 前向传播
             outputs = model(color_idx, numerical)
             loss = criterion(outputs, labels)
-
-            # 获取预测结果
-            _, preds = outputs.max(1)
-
-            # 统计损失
-            test_loss += loss.item()
-
-            # 保存预测结果和真实标签
-            all_preds.extend(preds.cpu().numpy())
+            
+            # 记录损失和预测结果
+            total_loss += loss.item()
+            _, predicted = outputs.max(1)
+            
+            # 保存预测和真实标签，用于计算指标
+            all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
-
-    # 计算平均测试损失
-    test_loss /= len(test_loader)
-
+    
+    # 计算平均损失
+    avg_loss = total_loss / len(test_loader)
+    
     # 计算评估指标
     accuracy = accuracy_score(all_labels, all_preds)
     f1 = f1_score(all_labels, all_preds, average='weighted')
-    conf_matrix = confusion_matrix(all_labels, all_preds)
-
+    
+    # 生成混淆矩阵
+    try:
+        conf_matrix = confusion_matrix(all_labels, all_preds)
+    except Exception as e:
+        print(f"计算混淆矩阵时出错: {e}")
+        conf_matrix = np.zeros((1, 1))
+    
     # 打印结果
-    print(f'Test Loss: {test_loss:.4f}')
-    print(f'Test Accuracy: {accuracy:.4f}')
-    print(f'Test F1 Score: {f1:.4f}')
-
+    print(f"测试集上的平均损失: {avg_loss:.4f}")
+    print(f"准确率: {accuracy:.4f}")
+    print(f"F1分数: {f1:.4f}")
+    
     # 可视化混淆矩阵
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
-                xticklabels=class_names if class_names else None,
-                yticklabels=class_names if class_names else None)
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    plt.savefig('confusion_matrix.png')
-
+    try:
+        plt.figure(figsize=(10, 8))
+        
+        # 创建一个正确的标签列表，确保与混淆矩阵尺寸一致
+        if class_names and len(class_names) >= conf_matrix.shape[0]:
+            display_class_names = [class_names[i] if i < len(class_names) else f"类别{i}" 
+                                  for i in range(conf_matrix.shape[0])]
+        else:
+            display_class_names = [f"类别{i}" for i in range(conf_matrix.shape[0])]
+            
+        # 使用seaborn绘制热图
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=display_class_names,
+                    yticklabels=display_class_names)
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
+        plt.title('混淆矩阵')
+        plt.tight_layout()
+        plt.savefig('confusion_matrix.png')
+        print("混淆矩阵已保存到 confusion_matrix.png")
+    except Exception as e:
+        print(f"绘制混淆矩阵时出错: {e}")
+    
     return accuracy, f1, conf_matrix
 
 
@@ -277,7 +303,7 @@ def main():
 
     # 加载数据
     # 注意：这里需要替换为实际的数据路径和类别
-    data_path = 'models\\training_data.csv'  # 需要替换为实际路径
+    data_path = 'models\\training_data.csv'  
     try:
         # 根据文件扩展名选择加载方式
         if data_path.endswith('.csv'):
@@ -314,7 +340,7 @@ def main():
         # 创建示例数据用于演示
         np.random.seed(42)
         n_samples = 1000
-        colors = ['红色', '蓝色', '绿色', '黄色', '银色', '金色', '铜色']
+        colors = ['紫红色','红色','紫黑色', '蓝色', '绿色','淡黄色','无色','银白色','黑色','褐色','白色','灰蓝色','金黄色', '钢灰色', '浅灰色', '暗灰色', '灰色','灰白色','暗棕色','黑灰色']
 
         df = pd.DataFrame({
             '颜色': np.random.choice(colors, n_samples),
