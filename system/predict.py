@@ -1,165 +1,271 @@
 import torch
-import pandas as pd
 import numpy as np
-from model import MetalClassifier
-from data_preprocessing import preprocess_data
 import matplotlib.pyplot as plt
-import seaborn as sns
+import os
+import matplotlib as mpl
+from matplotlib.font_manager import FontProperties
 
-def predict_material(model, features, color_encoder, materials_list, device='cuda'):
+# 设置matplotlib支持中文显示
+def set_chinese_font():
+    """设置中文字体支持"""
+    # 尝试设置中文字体，按优先级尝试不同字体
+    font_list = ['SimHei', 'Microsoft YaHei', 'STXihei', 'STHeiti', 'FangSong', 'KaiTi']
+    
+    # 检查系统上是否有可用的中文字体
+    chinese_font = None
+    for font in font_list:
+        try:
+            font_prop = FontProperties(fname=mpl.font_manager.findfont(font))
+            chinese_font = font
+            print(f"已找到并使用中文字体: {chinese_font}")
+            break
+        except:
+            continue
+    
+    if chinese_font:
+        plt.rcParams['font.family'] = chinese_font
+    else:
+        # 如果没有中文字体，使用无衬线字体，可能仍然不能很好地显示中文
+        plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial Unicode MS']
+        print("警告: 未找到合适的中文字体，中文可能无法正常显示")
+    
+    # 解决负号显示问题
+    plt.rcParams['axes.unicode_minus'] = False
+
+from model import load_model
+from data_preprocessing import load_preprocessor
+
+def predict_material(features, model, material_names, class_indices=None):
     """
-    预测材料种类
+    预测材料类型
     
     参数:
-        model: 训练好的模型
-        features: 材料特征
-        color_encoder: 颜色编码器
-        materials_list: 材料名称列表
-        device: 使用设备
-        
+    - features: 预处理后的特征张量
+    - model: 加载的模型
+    - material_names: 材料名称列表
+    - class_indices: 类别索引映射字典
+    
     返回:
-        预测结果，包括预测的材料名称和概率
+    - top_k_preds: 前k个预测结果 (索引, 概率, 材料名称)
     """
-    model.eval()
-    
-    # 将输入转换为PyTorch张量
-    input_tensor = torch.tensor(features.values, dtype=torch.float32).to(device)
-    
-    # 预测
-    with torch.no_grad():
-        outputs = model(input_tensor)
-        probabilities = torch.softmax(outputs, dim=1)
-        
-        # 获取最可能的材料类别
-        _, predicted = torch.max(outputs, 1)
-        
-    # 获取预测的类别和概率
-    predictions = predicted.cpu().numpy()
-    prob_values = probabilities.cpu().numpy()
-    
-    results = []
-    for i in range(len(predictions)):
-        material_idx = predictions[i]
-        material_name = materials_list[material_idx]
-        probability = prob_values[i, material_idx]
-        
-        # 获取前5个最可能的材料类别
-        top5_indices = np.argsort(prob_values[i])[::-1][:5]
-        top5_materials = [(materials_list[idx], prob_values[i, idx]) for idx in top5_indices]
-        
-        results.append({
-            'predicted_material': material_name,
-            'probability': probability,
-            'top5_predictions': top5_materials
-        })
-    
-    return results
-
-def plot_prediction_probabilities(results, index=0):
-    """
-    绘制预测概率分布图
-    
-    参数:
-        results: 预测结果
-        index: 要显示的结果索引
-    """
-    # 获取指定索引的结果
-    result = results[index]
-    top5_predictions = result['top5_predictions']
-    
-    # 提取材料名称和概率
-    materials = [item[0] for item in top5_predictions]
-    probabilities = [item[1] for item in top5_predictions]
-    
-    plt.figure(figsize=(10, 6))
-    bars = plt.bar(materials, probabilities, color='skyblue')
-    
-    # 添加数值标签
-    for bar, prob in zip(bars, probabilities):
-        plt.text(bar.get_x() + bar.get_width()/2, 
-                 prob + 0.01, 
-                 f'{prob:.2f}', 
-                 ha='center', 
-                 va='bottom')
-    
-    plt.xlabel('Materials')
-    plt.ylabel('Probability')
-    plt.title('Top 5 Predicted Materials')
-    plt.xticks(rotation=45, ha='right')
-    plt.ylim(0, 1.1)
-    plt.tight_layout()
-    plt.show()
-
-def load_trained_model(model_path, input_size, num_classes, device='cuda'):
-    """
-    加载训练好的模型
-    
-    参数:
-        model_path: 模型路径
-        input_size: 输入特征维度
-        num_classes: 类别数量
-        device: 使用设备
-        
-    返回:
-        加载好的模型
-    """
-    model = MetalClassifier(input_size, num_classes)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
-    model.eval()
-    return model
-
-if __name__ == "__main__":
-    # 设置设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
-    
-    # 加载训练和验证数据以获取预处理器和材料列表
-    train_path = "d:/Projects/Python_projects/dpl/Algorithm/system/complete_materials_train.csv"
-    val_path = "d:/Projects/Python_projects/dpl/Algorithm/system/complete_materials_val.csv"
-    
-    # 加载训练数据和验证数据
-    train_data = pd.read_csv(train_path)
-    val_data = pd.read_csv(val_path)
-    
-    # 获取材料名称列表
-    materials_list = train_data.iloc[:, 0].tolist()
-    
-    # 示例：预测验证集中的样本
-    val_sample = val_data.iloc[0:1, :]  # 取第一个样本进行预测
-    
-    # 处理特征
-    sample_features = val_sample.iloc[:, 105:].copy()
-    sample_features['name'] = val_sample.iloc[:, 0]
-    
-    # 加载训练好的模型
-    model_path = "d:/Projects/Python_projects/dpl/Algorithm/system/models/metal_classifier.pt"
-    input_size = 15 + len(set(train_data['颜色'].dropna()))  # 数值特征 + 颜色独热编码维度
-    num_classes = len(materials_list)
-    
-    model = load_trained_model(model_path, input_size, num_classes, device)
-    
-    # 预处理样本特征
-    _, sample_features_processed, color_encoder = preprocess_data(
-        pd.concat([train_data.iloc[:, 105:], pd.DataFrame(columns=['name'])], axis=1),
-        sample_features
-    )
-    
-    # 删除名称列
-    sample_features_processed = sample_features_processed.drop('name', axis=1)
+    features = features.to(device)
     
     # 进行预测
-    prediction_results = predict_material(model, sample_features_processed, color_encoder, materials_list, device)
+    model.eval()
+    with torch.no_grad():
+        outputs = model(features)
+        probabilities = torch.softmax(outputs, dim=1)
     
-    # 打印预测结果
-    for i, result in enumerate(prediction_results):
-        print(f"样本 {i+1}:")
-        print(f"预测材料: {result['predicted_material']}")
-        print(f"预测概率: {result['probability']:.4f}")
-        print("Top 5 预测:")
-        for material, prob in result['top5_predictions']:
-            print(f"  {material}: {prob:.4f}")
-        print()
+    # 获取预测结果
+    probabilities = probabilities.cpu().numpy()[0]
     
-    # 绘制预测概率分布图
-    plot_prediction_probabilities(prediction_results)
+    # 获取前k个预测结果
+    k = min(5, len(probabilities))
+    top_k_indices = np.argsort(probabilities)[::-1][:k]
+    top_k_probs = probabilities[top_k_indices]
+    
+    # 使用类别索引映射来获取材料名称
+    top_k_preds = []
+    if class_indices:
+        # 创建索引到名称的反向映射
+        idx_to_name = {v: k for k, v in class_indices.items()}
+        for idx, prob in zip(top_k_indices, top_k_probs):
+            name = idx_to_name.get(idx, f"未知类别 {idx}")
+            top_k_preds.append((idx, prob, name))
+    else:
+        # 如果没有提供类别索引映射，使用材料名称列表（如果索引有效）
+        for idx, prob in zip(top_k_indices, top_k_probs):
+            if idx < len(material_names):
+                name = material_names[idx]
+            else:
+                name = f"未知类别 {idx}"
+            top_k_preds.append((idx, prob, name))
+    
+    return top_k_preds
+
+def plot_prediction_results(top_k_preds, save_path=None):
+    """
+    可视化预测结果
+    
+    参数:
+    - top_k_preds: 前k个预测结果 (索引, 概率, 材料名称)
+    - save_path: 保存路径，如果为None则显示图像
+    """
+    # 设置中文字体
+    set_chinese_font()
+    
+    material_names = [pred[2] for pred in top_k_preds]
+    probabilities = [pred[1] for pred in top_k_preds]
+    
+    plt.figure(figsize=(10, 6))
+    bars = plt.barh(material_names, probabilities, color='cornflowerblue')
+    plt.xlabel('概率值', fontsize=12)
+    plt.ylabel('材料名称', fontsize=12)
+    plt.title('材料分类预测结果', fontsize=14)
+    plt.xlim(0, 1)
+    plt.grid(axis='x', linestyle='--', alpha=0.6)
+    
+    # 在条形上添加数值标签
+    for bar, prob in zip(bars, probabilities):
+        plt.text(bar.get_width() + 0.01, bar.get_y() + bar.get_height()/2, 
+                 f'{prob:.4f}', va='center')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+def get_user_input_with_missing_values():
+    """
+    获取用户输入，允许部分特征为空
+    
+    返回:
+    - sample: 包含材料特征的字典，缺失值用None表示
+    """
+    # 定义所有特征
+    features = {
+        '颜色': '颜色 (如：金黄色)',
+        '密度(g/cm3)': '密度 g/cm3',
+        '电阻率': '电阻率',
+        '比热容': '比热容',
+        '熔点': '熔点',
+        '沸点': '沸点',
+        '屈服强度': '屈服强度',
+        '抗拉强度': '抗拉强度',
+        '延展率': '延展率',
+        '热膨胀系数': '热膨胀系数',
+        '热值(J/kg)': '热值 J/kg',
+        '杨氏模量GPa': '杨氏模量 GPa',
+        '硬度': '硬度',
+        '疲劳强度': '疲劳强度',
+        '冲击韧性J/cm2': '冲击韧性 J/cm2'
+    }
+    
+    sample = {}
+    
+    print("\n请输入已知的材料特征（未知的直接按回车跳过）:")
+    
+    # 获取颜色 - 必须填写的特征
+    while True:
+        color = input("颜色 (如：金黄色，必填): ")
+        if color.strip():
+            sample['颜色'] = color
+            break
+        else:
+            print("颜色是必填项，请输入材料的颜色!")
+    
+    # 获取其他特征 - 可以为空
+    for key, prompt in features.items():
+        if key == '颜色':  # 跳过已填写的颜色
+            continue
+            
+        value = input(f"{prompt} (可选，按回车跳过): ")
+        if value.strip():
+            try:
+                sample[key] = float(value)
+            except ValueError:
+                print(f"警告: '{prompt}'需要数值，输入已被忽略")
+    
+    # 显示用户输入的特征数量
+    filled_features = len(sample)
+    total_features = len(features)
+    print(f"\n已填写 {filled_features}/{total_features} 个特征")
+    
+    return sample
+
+def main():
+    """主函数"""
+    # 设置中文显示
+    set_chinese_font()
+    
+    # 加载材料名称列表
+    import pickle
+    material_names_path = 'models/material_names.pkl'
+    class_indices_path = 'models/class_indices.pkl'
+    
+    if os.path.exists(material_names_path):
+        with open(material_names_path, 'rb') as f:
+            material_names = pickle.load(f)
+    else:
+        print("错误：找不到材料名称列表文件，请先运行训练脚本。")
+        return
+    
+    # 加载类别索引映射（如果存在）
+    class_indices = None
+    if os.path.exists(class_indices_path):
+        with open(class_indices_path, 'rb') as f:
+            class_indices = pickle.load(f)
+        print(f"已加载类别索引映射，共有 {len(class_indices)} 个映射。")
+    else:
+        print("警告：找不到类别索引映射文件，使用简单的索引顺序。")
+    
+    # 加载预处理器和模型
+    try:
+        preprocessor = load_preprocessor()
+        
+        # 加载模型
+        input_dim = 15  # 1个颜色特征 + 14个数值特征
+        hidden_dims = [256, 128, 64]
+        num_classes = 104  # 根据数据集中可能的类别数量
+        model = load_model(input_dim, hidden_dims, num_classes)
+        
+        print("模型加载成功！")
+    except Exception as e:
+        print(f"错误：加载模型或预处理器失败：{e}")
+        return
+    
+    # 获取用户输入
+    while True:
+        choice = input("\n选择输入方式：\n1. 手动输入（支持部分特征）\n2. 使用示例数据\n3. 退出\n请选择(1/2/3): ")
+        
+        if choice == '1':
+            # 用户手动输入
+            sample = get_user_input_with_missing_values()
+        elif choice == '2':
+            # 使用示例数据 (铜的属性)
+            sample = {
+                '颜色': '橙红色',
+                '密度(g/cm3)': 8.96,
+                '电阻率': 1.678,
+                '比热容': 0.39,
+                '熔点': 1083,
+                '沸点': 2567,
+                '屈服强度': 220,
+                '抗拉强度': 240,
+                '延展率': 35,
+                '热膨胀系数': 1.485e-05,
+                '热值(J/kg)': 24160,
+                '杨氏模量GPa': 130,
+                '硬度': 40,
+                '疲劳强度': 139.3,
+                '冲击韧性J/cm2': 42.5
+            }
+            print("\n使用示例数据：铜")
+        elif choice == '3':
+            print("退出程序。")
+            break
+        else:
+            print("无效选择，请重新输入。")
+            continue
+        
+        # 预处理输入样本
+        features = preprocessor.preprocess_single_sample(sample)
+        
+        # 进行预测
+        top_k_preds = predict_material(features, model, material_names, class_indices)
+        
+        # 显示结果
+        print("\n预测结果:")
+        for i, (idx, prob, name) in enumerate(top_k_preds):
+            print(f"Top {i+1}: {name} (置信度: {prob:.4f}, 类别索引: {idx})")
+        
+        # 可视化预测结果
+        plot_prediction_results(top_k_preds)
+
+if __name__ == "__main__":
+    main()
