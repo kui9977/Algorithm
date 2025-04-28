@@ -2,12 +2,37 @@ import os
 import torch
 import time
 from tqdm import tqdm
+import sys
+
+# 设置系统默认编码
+if sys.version_info >= (3, 0):
+    import importlib
+    importlib.reload(sys)
+else:
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
 
 # 导入自定义模块
 from data_preprocessing import DataPreprocessor, save_preprocessor
 from model import MetalClassifier, save_model
-from train_evaluate import train_model, evaluate_model, plot_learning_curves, plot_confusion_matrix
+from train_evaluate import train_model, evaluate_model, plot_learning_curves, plot_confusion_matrix, set_chinese_font
 from save_material_names import extract_and_save_material_names
+
+def check_file_encoding(filepath):
+    """检查文件编码"""
+    try:
+        import chardet
+        with open(filepath, 'rb') as f:
+            raw_data = f.read(10000)  # 读取前10000字节
+            result = chardet.detect(raw_data)
+            print(f"文件 {filepath} 检测到的编码: {result['encoding']} (置信度: {result['confidence']})")
+        return result
+    except ImportError:
+        print("未安装chardet库，无法检测文件编码")
+        return None
+    except Exception as e:
+        print(f"检测文件编码时出错: {e}")
+        return None
 
 def run_pipeline():
     """运行完整的金属材料分类算法流程"""
@@ -19,6 +44,11 @@ def run_pipeline():
     # 数据路径
     train_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_train.csv'
     val_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_val.csv'
+    
+    # 检查文件编码
+    print("\n检查训练和验证数据文件编码...")
+    check_file_encoding(train_path)
+    check_file_encoding(val_path)
     
     try:
         # 1. 提取并保存材料名称
@@ -71,9 +101,16 @@ def run_pipeline():
         print("\n步骤 6: 预测演示 - 使用部分特征...")
         from predict import predict_material, plot_prediction_results
         
+        # 获取训练集中已知的颜色列表
+        known_colors = preprocessor.get_known_colors()
+        print(f"训练集中包含的颜色: {known_colors}")
+        
+        # 选择一个训练集中已知的颜色
+        known_color = "紫红色"  # 这是铜的颜色，在训练集中存在
+        
         # 示例：只有颜色和密度的样本
         partial_sample = {
-            '颜色': '橙红色',
+            '颜色': known_color,
             '密度(g/cm3)': 8.96
         }
         
@@ -81,11 +118,38 @@ def run_pipeline():
         print(f"已知特征: 颜色={partial_sample['颜色']}, 密度={partial_sample['密度(g/cm3)']} g/cm3")
         
         features = preprocessor.preprocess_single_sample(partial_sample)
-        top_k_preds = predict_material(model, features, material_names, class_indices)
+        top_k_preds = predict_material(features, model, material_names, class_indices)
         
         print("\n预测结果:")
         for i, (idx, prob, name) in enumerate(top_k_preds[:3]):  # 只显示前3个结果
             print(f"Top {i+1}: {name} (置信度: {prob:.4f})")
+        
+        # 保存预处理器信息
+        if hasattr(preprocessor, 'successful_encoding') and preprocessor.successful_encoding:
+            encoding_info_path = 'models/encoding_info.txt'
+            with open(encoding_info_path, 'w', encoding='utf-8') as f:
+                f.write(f"数据文件成功使用的编码: {preprocessor.successful_encoding}\n")
+                f.write(f"可用颜色列表: {', '.join(known_colors)}\n")
+            print(f"编码信息已保存到 {encoding_info_path}")
+        
+        # 尝试使用一个未知颜色进行预测（测试容错处理）
+        unknown_color_sample = {
+            '颜色': '橙红色',  # 未知颜色
+            '密度(g/cm3)': 8.96
+        }
+        
+        print("\n尝试使用未知颜色预测:")
+        print(f"已知特征: 颜色={unknown_color_sample['颜色']}, 密度={unknown_color_sample['密度(g/cm3)']} g/cm3")
+        
+        try:
+            features = preprocessor.preprocess_single_sample(unknown_color_sample)
+            top_k_preds = predict_material(features, model, material_names, class_indices)
+            
+            print("\n预测结果 (使用未知颜色):")
+            for i, (idx, prob, name) in enumerate(top_k_preds[:3]):
+                print(f"Top {i+1}: {name} (置信度: {prob:.4f})")
+        except Exception as e:
+            print(f"预测失败: {e}")
         
         print("\n=== 流程完成 ===")
         print(f"模型已保存到 models/metal_classifier.pth")
@@ -98,6 +162,12 @@ def run_pipeline():
         print(f"执行过程中出错: {e}")
         import traceback
         traceback.print_exc()
+        
+        # 提供编码相关建议
+        print("\n可能是编码问题，尝试以下解决方案:")
+        print("1. 安装chardet库: pip install chardet")
+        print("2. 尝试手动将CSV文件转换为UTF-8编码")
+        print("3. 使用文本编辑器打开CSV文件，另存为UTF-8编码格式")
 
 if __name__ == "__main__":
     run_pipeline()

@@ -120,64 +120,6 @@ def plot_prediction_results(top_k_preds, save_path=None):
     else:
         plt.show()
 
-def get_user_input_with_missing_values():
-    """
-    获取用户输入，允许部分特征为空
-    
-    返回:
-    - sample: 包含材料特征的字典，缺失值用None表示
-    """
-    # 定义所有特征
-    features = {
-        '颜色': '颜色 (如：金黄色)',
-        '密度(g/cm3)': '密度 g/cm3',
-        '电阻率': '电阻率',
-        '比热容': '比热容',
-        '熔点': '熔点',
-        '沸点': '沸点',
-        '屈服强度': '屈服强度',
-        '抗拉强度': '抗拉强度',
-        '延展率': '延展率',
-        '热膨胀系数': '热膨胀系数',
-        '热值(J/kg)': '热值 J/kg',
-        '杨氏模量GPa': '杨氏模量 GPa',
-        '硬度': '硬度',
-        '疲劳强度': '疲劳强度',
-        '冲击韧性J/cm2': '冲击韧性 J/cm2'
-    }
-    
-    sample = {}
-    
-    print("\n请输入已知的材料特征（未知的直接按回车跳过）:")
-    
-    # 获取颜色 - 必须填写的特征
-    while True:
-        color = input("颜色 (如：金黄色，必填): ")
-        if color.strip():
-            sample['颜色'] = color
-            break
-        else:
-            print("颜色是必填项，请输入材料的颜色!")
-    
-    # 获取其他特征 - 可以为空
-    for key, prompt in features.items():
-        if key == '颜色':  # 跳过已填写的颜色
-            continue
-            
-        value = input(f"{prompt} (可选，按回车跳过): ")
-        if value.strip():
-            try:
-                sample[key] = float(value)
-            except ValueError:
-                print(f"警告: '{prompt}'需要数值，输入已被忽略")
-    
-    # 显示用户输入的特征数量
-    filled_features = len(sample)
-    total_features = len(features)
-    print(f"\n已填写 {filled_features}/{total_features} 个特征")
-    
-    return sample
-
 def main():
     """主函数"""
     # 设置中文显示
@@ -208,6 +150,15 @@ def main():
     try:
         preprocessor = load_preprocessor()
         
+        # 显示可用的颜色选项
+        known_colors = preprocessor.get_known_colors()
+        print("\n可用的颜色选项:")
+        for i, color in enumerate(known_colors):
+            print(f"{i+1}. {color}", end="\t")
+            if (i+1) % 5 == 0:  # 每行显示5个颜色
+                print()
+        print("\n")
+        
         # 加载模型
         input_dim = 15  # 1个颜色特征 + 14个数值特征
         hidden_dims = [256, 128, 64]
@@ -229,7 +180,7 @@ def main():
         elif choice == '2':
             # 使用示例数据 (铜的属性)
             sample = {
-                '颜色': '橙红色',
+                '颜色': '紫红色',  # 必须使用训练集中存在的颜色
                 '密度(g/cm3)': 8.96,
                 '电阻率': 1.678,
                 '比热容': 0.39,
@@ -266,6 +217,83 @@ def main():
         
         # 可视化预测结果
         plot_prediction_results(top_k_preds)
+
+def get_user_input_with_missing_values():
+    """
+    获取用户输入，允许部分特征为空
+    
+    返回:
+    - sample: 包含材料特征的字典，缺失值用None表示
+    """
+    # 定义所有特征
+    features = {
+        '颜色': '颜色 (如：金黄色)',
+        '密度(g/cm3)': '密度 g/cm3',
+        '电阻率': '电阻率',
+        '比热容': '比热容',
+        '熔点': '熔点',
+        '沸点': '沸点',
+        '屈服强度': '屈服强度',
+        '抗拉强度': '抗拉强度',
+        '延展率': '延展率',
+        '热膨胀系数': '热膨胀系数',
+        '热值(J/kg)': '热值 J/kg',
+        '杨氏模量GPa': '杨氏模量 GPa',
+        '硬度': '硬度',
+        '疲劳强度': '疲劳强度',
+        '冲击韧性J/cm2': '冲击韧性 J/cm2'
+    }
+    
+    sample = {}
+    
+    try:
+        # 尝试加载预处理器以获取可用颜色列表
+        from data_preprocessing import load_preprocessor
+        preprocessor = load_preprocessor()
+        known_colors = preprocessor.get_known_colors()
+        print("\n可用的颜色选项:")
+        for i, color in enumerate(known_colors):
+            print(f"{i+1}. {color}", end="\t")
+            if (i+1) % 5 == 0:  # 每行显示5个颜色
+                print()
+        print("\n")
+    except:
+        known_colors = []
+        
+    print("\n请输入已知的材料特征（未知的直接按回车跳过）:")
+    
+    # 获取颜色 - 必须填写的特征
+    while True:
+        color = input("颜色 (必填): ")
+        if color.strip():
+            if known_colors and color not in known_colors:
+                print(f"警告: 颜色 '{color}' 不在已知颜色列表中，这可能导致预测准确度降低")
+                confirm = input("是否使用此颜色? (y/n): ")
+                if confirm.lower() != 'y':
+                    continue
+            sample['颜色'] = color
+            break
+        else:
+            print("颜色是必填项，请输入材料的颜色!")
+    
+    # 获取其他特征 - 可以为空
+    for key, prompt in features.items():
+        if key == '颜色':  # 跳过已填写的颜色
+            continue
+            
+        value = input(f"{prompt} (可选，按回车跳过): ")
+        if value.strip():
+            try:
+                sample[key] = float(value)
+            except ValueError:
+                print(f"警告: '{prompt}'需要数值，输入已被忽略")
+    
+    # 显示用户输入的特征数量
+    filled_features = len(sample)
+    total_features = len(features)
+    print(f"\n已填写 {filled_features}/{total_features} 个特征")
+    
+    return sample
 
 if __name__ == "__main__":
     main()

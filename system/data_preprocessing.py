@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
 import os
+import codecs
 
 class MetalDataset(Dataset):
     """金属材料数据集"""
@@ -30,7 +31,7 @@ class DataPreprocessor:
     def load_and_preprocess_data(self, train_path, val_path, batch_size=32):
         """加载并预处理训练和验证数据"""
         # 尝试多种编码方式读取数据
-        encodings = ['gbk', 'gb2312', 'gb18030', 'cp936', 'latin-1', 'utf-8-sig', 'iso-8859-1']
+        encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'gb18030', 'cp936', 'latin-1', 'iso-8859-1']
         
         train_df = None
         val_df = None
@@ -39,8 +40,43 @@ class DataPreprocessor:
         for encoding in encodings:
             try:
                 print(f"尝试使用 {encoding} 编码读取数据...")
+                
+                # 先尝试直接检测文件的编码
+                with open(train_path, 'rb') as f:
+                    raw_data = f.read()
+                    
+                # 尝试检测编码
+                try:
+                    import chardet
+                    detected = chardet.detect(raw_data)
+                    detected_encoding = detected['encoding']
+                    confidence = detected['confidence']
+                    print(f"检测到文件编码可能为 {detected_encoding}，置信度: {confidence}")
+                    
+                    # 如果检测到编码且置信度高，优先使用检测到的编码
+                    if detected_encoding and confidence > 0.7:
+                        print(f"尝试使用检测到的编码: {detected_encoding}")
+                        try:
+                            train_df = pd.read_csv(train_path, encoding=detected_encoding)
+                            val_df = pd.read_csv(val_path, encoding=detected_encoding)
+                            self.successful_encoding = detected_encoding
+                            print(f"成功使用检测到的编码 {detected_encoding} 读取数据!")
+                            break
+                        except Exception as e:
+                            print(f"使用检测到的编码 {detected_encoding} 读取失败: {e}")
+                except ImportError:
+                    print("未安装chardet库，无法自动检测编码")
+                
+                # 如果自动检测失败，则使用指定的编码尝试
                 train_df = pd.read_csv(train_path, encoding=encoding)
                 val_df = pd.read_csv(val_path, encoding=encoding)
+                
+                # 检查中文字符是否正确
+                sample_text = str(train_df.iloc[0, 105])  # 检查颜色列的第一个值
+                if '?' in sample_text or '�' in sample_text:
+                    print(f"使用 {encoding} 编码读取的数据中可能包含乱码")
+                    continue
+                
                 self.successful_encoding = encoding
                 print(f"成功使用 {encoding} 编码读取数据!")
                 break
@@ -49,7 +85,32 @@ class DataPreprocessor:
                 continue
         
         if train_df is None or val_df is None:
+            # 如果所有编码都失败，尝试二进制方式读取并手动解码
+            try:
+                print("尝试手动解码...")
+                with open(train_path, 'rb') as f:
+                    content = f.read()
+                
+                # 尝试使用errors='replace'选项
+                for encoding in encodings:
+                    try:
+                        decoded = content.decode(encoding, errors='replace')
+                        train_df = pd.read_csv(train_path, encoding=encoding, error_bad_lines=False)
+                        val_df = pd.read_csv(val_path, encoding=encoding, error_bad_lines=False)
+                        self.successful_encoding = f"{encoding} (with errors='replace')"
+                        print(f"成功使用 {encoding} 编码读取数据 (with errors='replace')!")
+                        break
+                    except:
+                        continue
+            except Exception as e:
+                print(f"手动解码失败: {e}")
+        
+        if train_df is None or val_df is None:
             raise ValueError("无法读取数据文件，请检查文件格式和编码。")
+        
+        # 显示读取成功的数据样本
+        print(f"训练集表头: {list(train_df.columns)[:10]}...")
+        print(f"颜色列数据样本: {list(train_df.iloc[:5, 105])}")
         
         # 提取标签（独热编码转为类别索引）
         train_labels = train_df.iloc[:, 1:105].values.argmax(axis=1)
@@ -148,8 +209,15 @@ class DataPreprocessor:
         # 创建颜色特征数组
         color = np.array([sample_dict['颜色']]).reshape(-1, 1)
         
-        # 编码颜色
-        color_encoded = self.color_encoder.transform(color.ravel()).reshape(-1, 1)
+        # 安全处理颜色编码 - 处理未见过的颜色标签
+        try:
+            color_encoded = self.color_encoder.transform(color.ravel()).reshape(-1, 1)
+        except (ValueError, KeyError) as e:
+            print(f"警告: 颜色 '{sample_dict['颜色']}' 在训练数据中不存在")
+            print("已知的颜色包括:", list(self.color_encoder.classes_))
+            print("使用默认颜色编码(0)替代")
+            # 使用默认值0代替未知颜色
+            color_encoded = np.array([0]).reshape(-1, 1)
         
         # 准备数值特征默认值字典
         default_values = {
@@ -205,6 +273,10 @@ class DataPreprocessor:
         features = np.hstack((color_encoded, numeric_scaled))
         
         return torch.tensor(features, dtype=torch.float32)
+    
+    def get_known_colors(self):
+        """获取训练集中已知的颜色列表"""
+        return list(self.color_encoder.classes_)
 
 def save_preprocessor(preprocessor, path='models/preprocessor.pkl'):
     """保存预处理器"""

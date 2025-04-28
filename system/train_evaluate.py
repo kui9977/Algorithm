@@ -7,16 +7,17 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 import pandas as pd
 import os
-from tqdm import tqdm
 import time
+from tqdm import tqdm
 import matplotlib as mpl
 from matplotlib.font_manager import FontProperties
+import matplotlib.pyplot as plt
 
 # 设置matplotlib支持中文显示
 def set_chinese_font():
     """设置中文字体支持"""
     # 尝试设置中文字体，按优先级尝试不同字体
-    font_list = ['SimHei', 'Microsoft YaHei', 'STXihei', 'STHeiti', 'FangSong', 'KaiTi']
+    font_list = ['SimHei', 'Microsoft YaHei', 'STXihei', 'STHeiti', 'FangSong', 'KaiTi', 'Arial Unicode MS', 'NSimSun']
     
     # 检查系统上是否有可用的中文字体
     chinese_font = None
@@ -32,9 +33,9 @@ def set_chinese_font():
     if chinese_font:
         plt.rcParams['font.family'] = chinese_font
     else:
-        # 如果没有中文字体，使用无衬线字体，可能仍然不能很好地显示中文
+        # 如果没有中文字体，使用无衬线字体，并启用Unicode支持
         plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial Unicode MS']
-        print("警告: 未找到合适的中文字体，中文可能无法正常显示")
+        print("警告: 未找到合适的中文字体，尝试使用默认Unicode兼容字体")
     
     # 解决负号显示问题
     plt.rcParams['axes.unicode_minus'] = False
@@ -306,6 +307,9 @@ def plot_confusion_matrix(cm, label_names, save_path='confusion_matrix.png'):
         print(f"混淆矩阵类别过多({len(label_names)}个)，只显示前{max_display}个类别")
         cm = cm[:max_display, :max_display]
         label_names = label_names[:max_display]
+    
+    # 确保标签名称是字符串类型
+    label_names = [str(name).strip() for name in label_names]
     
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
