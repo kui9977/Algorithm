@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 import torch
 import logging
+import sys
 
 # 设置项目根目录
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,14 @@ MODELS_DIR = os.path.join(ROOT_DIR, 'models')
 
 # 确保模型目录存在
 os.makedirs(MODELS_DIR, exist_ok=True)
+
+# 将项目根目录添加到系统路径
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+# 导入项目模块
+from model import MetalClassifier, load_model
+from data_preprocessing import load_preprocessor
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -32,8 +41,7 @@ def load_resources():
     try:
         # 加载预处理器
         preprocessor_path = os.path.join(MODELS_DIR, 'preprocessor.pkl')
-        with open(preprocessor_path, 'rb') as f:
-            preprocessor = pickle.load(f)
+        preprocessor = load_preprocessor(preprocessor_path)
         
         # 加载材料名称
         material_names_path = os.path.join(MODELS_DIR, 'material_names.pkl')
@@ -45,19 +53,43 @@ def load_resources():
         with open(class_indices_path, 'rb') as f:
             class_indices = pickle.load(f)
         
-        # 加载模型
+        # 确定类别数和输入维度
+        input_dim = 15  # 1个颜色特征 + 14个数值特征
+        hidden_dims = [256, 128, 64]
+        
+        # 先尝试从保存的模型获取实际类别数
+        try:
+            model_path = os.path.join(MODELS_DIR, 'metal_classifier.pth')
+            state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+            if 'model.12.weight' in state_dict:
+                num_classes = state_dict['model.12.weight'].size(0)
+                logger.info(f"从模型权重检测到 {num_classes} 个输出类别")
+            else:
+                # 如果无法从模型中直接检测，使用材料名称数量
+                num_classes = len(material_names)
+                logger.info(f"未能从模型权重检测到类别数，使用材料名称数量: {num_classes}")
+        except Exception as e:
+            # 如果无法加载模型进行检测，使用最大类别数
+            logger.warning(f"从模型中检测类别数失败: {e}")
+            num_classes = max(len(material_names), len(class_indices), 104)
+            logger.info(f"使用估计的类别数: {num_classes}")
+        
+        # 使用load_model函数加载模型(自动处理类别数)
         model_path = os.path.join(MODELS_DIR, 'metal_classifier.pth')
-        model = torch.load(model_path, map_location=torch.device('cpu'))
-        model.eval()
+        model = load_model(input_dim, hidden_dims, num_classes, model_path)
+        model.eval()  # 确保模型处于评估模式
         
         return {
             'preprocessor': preprocessor,
             'material_names': material_names,
             'class_indices': class_indices,
-            'model': model
+            'model': model,
+            'num_classes': num_classes  # 记录实际使用的类别数
         }
     except Exception as e:
         logger.error(f"加载资源失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 # 尝试加载资源
@@ -107,94 +139,86 @@ def predict():
     
     try:
         # 准备预测数据
-        features = {
-            'color': data.get('color'),
-            'density': data.get('density'),
-            'resistivity': data.get('resistivity'),
-            'specific_heat': data.get('specific_heat'),
-            'melting_point': data.get('melting_point'),
-            'boiling_point': data.get('boiling_point'),
-            'yield_strength': data.get('yield_strength'),
-            'tensile_strength': data.get('tensile_strength'),
-            'elongation': data.get('elongation'),
-            'thermal_expansion': data.get('thermal_expansion'),
-            'heat_value': data.get('heat_value'),
-            'youngs_modulus': data.get('youngs_modulus'),
-            'hardness': data.get('hardness'),
-            'fatigue_strength': data.get('fatigue_strength'),
-            'impact_toughness': data.get('impact_toughness')
+        sample_dict = {
+            '颜色': data.get('color')
         }
+        
+        # 将其他特征添加到sample_dict
+        feature_mapping = {
+            'density': '密度(g/cm3)',
+            'resistivity': '电阻率',
+            'specific_heat': '比热容',
+            'melting_point': '熔点',
+            'boiling_point': '沸点',
+            'yield_strength': '屈服强度',
+            'tensile_strength': '抗拉强度',
+            'elongation': '延展率',
+            'thermal_expansion': '热膨胀系数',
+            'heat_value': '热值(J/kg)',
+            'youngs_modulus': '杨氏模量GPa',
+            'hardness': '硬度',
+            'fatigue_strength': '疲劳强度',
+            'impact_toughness': '冲击韧性J/cm2'
+        }
+        
+        # 将API参数映射到模型所需参数格式
+        for api_key, model_key in feature_mapping.items():
+            if api_key in data and data[api_key] is not None:
+                sample_dict[model_key] = data[api_key]
         
         # 预处理输入特征
         preprocessor = resources['preprocessor']
         model = resources['model']
         material_names = resources['material_names']
+        class_indices = resources['class_indices']
         
-        # 转换颜色特征
-        color_encoded = preprocessor['color'].transform([features['color']])[0]
+        # 使用预处理器处理样本
+        features = preprocessor.preprocess_single_sample(sample_dict)
         
-        # 准备数值特征
-        numeric_features = [
-            features.get('density'),
-            features.get('resistivity'),
-            features.get('specific_heat'),
-            features.get('melting_point'),
-            features.get('boiling_point'),
-            features.get('yield_strength'),
-            features.get('tensile_strength'),
-            features.get('elongation'),
-            features.get('thermal_expansion'),
-            features.get('heat_value'),
-            features.get('youngs_modulus'),
-            features.get('hardness'),
-            features.get('fatigue_strength'),
-            features.get('impact_toughness')
-        ]
-        
-        # 将数值特征转换为numpy数组
-        numeric_features = np.array([numeric_features])
-        
-        # 处理数值特征中的缺失值并进行标准化
-        numeric_features_processed = preprocessor['numeric'].transform(numeric_features)
-        
-        # 合并特征
-        combined_features = np.column_stack((color_encoded, numeric_features_processed.flatten()))
-        combined_features = torch.FloatTensor(combined_features)
-        
-        # 预测
+        # 进行预测
         with torch.no_grad():
-            output = model(combined_features)
-            probabilities = torch.nn.functional.softmax(output, dim=1).numpy()[0]
+            outputs = model(features)
+            probabilities = torch.softmax(outputs, dim=1).cpu().numpy()[0]
         
-        # 获取前几个最可能的预测结果
-        top_k = 5
-        top_indices = np.argsort(probabilities)[::-1][:top_k]
+        # 获取前k个预测结果
+        k = min(5, len(probabilities))
+        top_indices = np.argsort(probabilities)[::-1][:k]
         top_probs = probabilities[top_indices]
+        
+        # 创建索引到名称的反向映射
+        idx_to_name = {v: k for k, v in class_indices.items()}
         
         # 准备返回结果
         results = []
         for i, (idx, prob) in enumerate(zip(top_indices, top_probs)):
+            name = idx_to_name.get(idx, f"未知类别 {idx}")
             results.append({
-                'material': material_names[idx],
+                'material': name,
                 'probability': float(prob),
                 'index': int(idx)
             })
         
         # 生成预测结果可视化图表
         plt.figure(figsize=(10, 6))
-        plt.bar(
-            [result['material'] for result in results[:5]], 
-            [result['probability'] for result in results[:5]]
-        )
-        plt.xlabel('材料类型')
-        plt.ylabel('概率')
-        plt.title('材料预测结果概率分布')
-        plt.xticks(rotation=45)
-        plt.tight_layout()
+        materials = [result['material'] for result in results]
+        probs = [result['probability'] for result in results]
+        
+        # 画条形图
+        bars = plt.barh(materials[::-1], probs[::-1], color='cornflowerblue')
+        plt.xlabel('概率值')
+        plt.ylabel('材料名称')
+        plt.title('材料分类预测结果')
+        plt.xlim(0, 1)
+        plt.grid(axis='x', linestyle='--', alpha=0.6)
+        
+        # 在条形上添加数值标签
+        for bar, prob in zip(bars, probs[::-1]):
+            plt.text(bar.get_width() + 0.01, bar.get_y() + bar.get_height()/2, 
+                     f'{prob:.4f}', va='center')
         
         # 将图表转换为base64字符串
         buf = io.BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         plt.close()
@@ -207,6 +231,8 @@ def predict():
     
     except Exception as e:
         logger.error(f"预测过程出错: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'预测过程出错: {str(e)}'}), 500
 
 # 根路径接口

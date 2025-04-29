@@ -159,15 +159,22 @@ def main():
                 print()
         print("\n")
         
-        # 加载模型
+        # 基本参数
         input_dim = 15  # 1个颜色特征 + 14个数值特征
         hidden_dims = [256, 128, 64]
-        num_classes = 104  # 根据数据集中可能的类别数量
-        model = load_model(input_dim, hidden_dims, num_classes)
+        
+        # 初始类别数预估（会被模型权重中的实际类别数覆盖）
+        num_classes = max(len(material_names), 104)  # 保守起见使用较大值
+        
+        # 加载模型 - load_model函数会自动检测并使用正确的类别数
+        model_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\metal_classifier.pth'
+        model = load_model(input_dim, hidden_dims, num_classes, model_path)
         
         print("模型加载成功！")
     except Exception as e:
         print(f"错误：加载模型或预处理器失败：{e}")
+        import traceback
+        traceback.print_exc()
         return
     
     # 获取用户输入

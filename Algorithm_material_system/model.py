@@ -55,8 +55,47 @@ def save_model(model, path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algor
     torch.save(model.state_dict(), path)
 
 def load_model(input_dim, hidden_dims, num_classes, path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\metal_classifier.pth'):
-    """加载模型"""
+    """加载模型
+    
+    参数:
+    - input_dim: 输入特征维度
+    - hidden_dims: 隐藏层维度列表
+    - num_classes: 类别数量 (会根据模型权重检测到的类别数自动调整)
+    - path: 模型权重路径
+    """
+    # 先检查模型权重中的实际类别数
+    try:
+        # 加载状态字典
+        state_dict = torch.load(path, map_location=torch.device('cpu'))
+        
+        # 检查最后一层权重尺寸，获取实际类别数
+        if 'model.12.weight' in state_dict:
+            actual_classes = state_dict['model.12.weight'].size(0)
+            if actual_classes != num_classes:
+                print(f"警告: 模型权重文件包含 {actual_classes} 个类别，与请求的 {num_classes} 个类别不匹配")
+                print(f"将使用模型权重中的类别数 {actual_classes}")
+                num_classes = actual_classes
+    except Exception as e:
+        print(f"读取模型权重信息出错，将使用提供的类别数 {num_classes}: {e}")
+
+    # 创建具有正确类别数的模型
     model = MetalClassifier(input_dim, hidden_dims, num_classes)
-    model.load_state_dict(torch.load(path))
+    
+    # 尝试加载权重
+    try:
+        # 尝试从状态字典加载模型
+        model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
+        print(f"成功加载模型，类别数: {num_classes}")
+    except Exception as e:
+        print(f"标准加载模型失败: {e}")
+        try:
+            # 尝试非严格加载
+            model.load_state_dict(torch.load(path, map_location=torch.device('cpu')), strict=False)
+            print("使用非严格模式加载模型（部分参数可能不匹配）")
+        except Exception as e2:
+            print(f"非严格加载也失败: {e2}")
+            raise ValueError(f"无法加载模型: {e2}")
+    
+    # 设置为评估模式
     model.eval()
     return model
