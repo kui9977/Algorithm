@@ -2,8 +2,8 @@ import pandas as pd
 import pickle
 import os
 
-def extract_and_save_material_names(train_path='./complete_materials_train.csv', 
-                                   val_path='./complete_materials_val.csv'):
+def extract_and_save_material_names(train_path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_train.csv', 
+                                   val_path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_val.csv'):
     """提取并保存材料名称列表"""
     # 尝试多种编码方式读取数据
     encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'gb18030', 'cp936', 'latin-1', 'iso-8859-1']
@@ -65,8 +65,8 @@ def extract_and_save_material_names(train_path='./complete_materials_train.csv',
     material_names = sorted(list(set(material_names)))
     
     # 保存材料名称
-    os.makedirs('models', exist_ok=True)
-    with open('models/material_names.pkl', 'wb') as f:
+    os.makedirs('D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models', exist_ok=True)
+    with open('D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\material_names.pkl', 'wb') as f:
         pickle.dump(material_names, f)
     
     print(f"共提取并保存了 {len(material_names)} 个材料名称")

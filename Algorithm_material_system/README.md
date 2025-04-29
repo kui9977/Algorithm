@@ -118,7 +118,7 @@ python predict.py
 python api_service.py --debug
 
 # 生产模式启动
-python api_service.py --host 0.0.0.0 --port 5000 --workers 4
+python api_service.py --host localhost --port 5000 --workers 4
 ```
 
 ### 5. 调用API示例
@@ -126,14 +126,14 @@ python api_service.py --host 0.0.0.0 --port 5000 --workers 4
 参考`api_client.py`中的示例代码:
 
 ```bash
-python api_client.py
+python api_client.py --url http://localhost:5000
 ```
 
 ## API接口说明
 
 ### 1. 健康检查
 
-- **URL**: `/api/health`
+- **URL**: `http://localhost:5000/api/health`
 - **方法**: GET
 - **描述**: 检查API服务是否正常运行
 - **返回示例**:
@@ -147,7 +147,7 @@ python api_client.py
 
 ### 2. 获取已知颜色列表
 
-- **URL**: `/api/known_colors`
+- **URL**: `http://localhost:5000/api/known_colors`
 - **方法**: GET
 - **描述**: 获取训练数据中已知的颜色列表
 - **返回示例**:

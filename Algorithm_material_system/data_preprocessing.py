@@ -278,7 +278,7 @@ class DataPreprocessor:
         """获取训练集中已知的颜色列表"""
         return list(self.color_encoder.classes_)
 
-def save_preprocessor(preprocessor, path='models/preprocessor.pkl'):
+def save_preprocessor(preprocessor, path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\preprocessor.pkl'):
     """保存预处理器"""
     import pickle
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -292,7 +292,7 @@ def save_preprocessor(preprocessor, path='models/preprocessor.pkl'):
             f.write(preprocessor.successful_encoding)
         print(f"成功的编码格式 '{preprocessor.successful_encoding}' 已保存到 {encoding_path}")
 
-def load_preprocessor(path='models/preprocessor.pkl'):
+def load_preprocessor(path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\preprocessor.pkl'):
     """加载预处理器"""
     import pickle
     with open(path, 'rb') as f:

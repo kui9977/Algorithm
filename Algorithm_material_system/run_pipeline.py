@@ -42,8 +42,8 @@ def run_pipeline():
     torch.manual_seed(42)
     
     # 数据路径
-    train_path = './complete_materials_train.csv'
-    val_path = './complete_materials_val.csv'
+    train_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_train.csv'
+    val_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_val.csv'
     
     # 检查文件编码
     print("\n检查训练和验证数据文件编码...")
@@ -68,9 +68,9 @@ def run_pipeline():
         
         # 保存类别索引映射
         import pickle
-        with open('models/class_indices.pkl', 'wb') as f:
+        with open('D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\class_indices.pkl', 'wb') as f:
             pickle.dump(class_indices, f)
-        print(f"类别索引映射已保存到 models/class_indices.pkl")
+        print(f"类别索引映射已保存到 D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\class_indices.pkl")
         
         # 3. 模型训练
         print("\n步骤 3: 训练模型...")
@@ -126,7 +126,7 @@ def run_pipeline():
         
         # 保存预处理器信息
         if hasattr(preprocessor, 'successful_encoding') and preprocessor.successful_encoding:
-            encoding_info_path = 'models/encoding_info.txt'
+            encoding_info_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\encoding_info.txt'
             with open(encoding_info_path, 'w', encoding='utf-8') as f:
                 f.write(f"数据文件成功使用的编码: {preprocessor.successful_encoding}\n")
                 f.write(f"可用颜色列表: {', '.join(known_colors)}\n")

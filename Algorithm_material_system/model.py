@@ -49,12 +49,12 @@ class EnsembleModel:
         
         return ensemble_pred
 
-def save_model(model, path='models/metal_classifier.pth'):
+def save_model(model, path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\metal_classifier.pth'):
     """保存模型"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(model.state_dict(), path)
 
-def load_model(input_dim, hidden_dims, num_classes, path='models/metal_classifier.pth'):
+def load_model(input_dim, hidden_dims, num_classes, path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\metal_classifier.pth'):
     """加载模型"""
     model = MetalClassifier(input_dim, hidden_dims, num_classes)
     model.load_state_dict(torch.load(path))

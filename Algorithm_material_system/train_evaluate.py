@@ -44,7 +44,7 @@ from model import MetalClassifier, save_model
 from data_preprocessing import DataPreprocessor, save_preprocessor
 
 def train_model(train_loader, val_loader, input_dim, num_classes, hidden_dims=[256, 128, 64], 
-                lr=0.001, epochs=100, patience=10, model_path='models/metal_classifier.pth'):
+                lr=0.001, epochs=100, patience=10, model_path='D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\metal_classifier.pth'):
     """
     训练金属分类模型
     
@@ -326,8 +326,8 @@ def plot_confusion_matrix(cm, label_names, save_path='confusion_matrix.png'):
 def main():
     """主函数"""
     # 数据路径
-    train_path = './complete_materials_train.csv'
-    val_path = './complete_materials_val.csv'
+    train_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_train.csv'
+    val_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\complete_materials_val.csv'
     
     # 创建数据预处理器
     print("加载并预处理数据...")
@@ -359,8 +359,8 @@ def main():
     
     # 绘制学习曲线和混淆矩阵
     print("生成可视化图表...")
-    plot_learning_curves(history)
-    plot_confusion_matrix(eval_metrics['confusion_matrix'], eval_metrics['label_names'])
+    plot_learning_curves(history, 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\learning_curves.png')
+    plot_confusion_matrix(eval_metrics['confusion_matrix'], eval_metrics['label_names'], 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\confusion_matrix.png')
     
     print("训练和评估完成!")
     

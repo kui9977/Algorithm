@@ -127,8 +127,8 @@ def main():
     
     # 加载材料名称列表
     import pickle
-    material_names_path = 'models/material_names.pkl'
-    class_indices_path = 'models/class_indices.pkl'
+    material_names_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\material_names.pkl'
+    class_indices_path = 'D:\\Projects\\Python_projects\\dpl\\Algorithm\\Algorithm_material_system\\models\\class_indices.pkl'
     
     if os.path.exists(material_names_path):
         with open(material_names_path, 'rb') as f:
