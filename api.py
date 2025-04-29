@@ -77,17 +77,17 @@ def health_check():
 def get_known_colors():
     """获取系统已知的颜色列表"""
     if resources is None:
-        return jsonify({'error': '系统资源未正确加载'}), 500
+        return jsonify({'success': False, 'error': '系统资源未正确加载', 'colors': []}), 500
     
     try:
         # 从预处理器中获取颜色列表
         color_encoder = resources['preprocessor']['color']
         colors = color_encoder.classes_.tolist()
         
-        return jsonify({'colors': colors})
+        return jsonify({'success': True, 'colors': colors})
     except Exception as e:
         logger.error(f"获取颜色列表失败: {e}")
-        return jsonify({'error': f'获取颜色列表失败: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': f'获取颜色列表失败: {str(e)}', 'colors': []}), 500
 
 # 预测接口
 @api_bp.route('/predict', methods=['POST'])

@@ -37,10 +37,16 @@ def get_known_colors(base_url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-        return response.json().get('colors', [])
+        result = response.json()
+        # 兼容处理两种不同的返回格式
+        if 'colors' in result:
+            return result.get('colors', [])
+        else:
+            print(f"API返回格式不符合预期: {result}")
+            return []
     except requests.exceptions.RequestException as e:
         print(f"获取颜色列表失败: {e}")
-        if hasattr(e.response, 'text'):
+        if hasattr(e, 'response') and e.response:
             print(f"错误响应: {e.response.text}")
         return []
 
