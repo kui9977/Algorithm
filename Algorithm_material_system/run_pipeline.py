@@ -42,8 +42,8 @@ def run_pipeline():
     torch.manual_seed(42)
     
     # 数据路径
-    train_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_train.csv'
-    val_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_val.csv'
+    train_path = './complete_materials_train.csv'
+    val_path = './complete_materials_val.csv'
     
     # 检查文件编码
     print("\n检查训练和验证数据文件编码...")

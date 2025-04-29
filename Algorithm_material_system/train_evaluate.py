@@ -326,8 +326,8 @@ def plot_confusion_matrix(cm, label_names, save_path='confusion_matrix.png'):
 def main():
     """主函数"""
     # 数据路径
-    train_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_train.csv'
-    val_path = 'd:\\Projects\\Python_projects\\dpl\\Algorithm\\system\\complete_materials_val.csv'
+    train_path = './complete_materials_train.csv'
+    val_path = './complete_materials_val.csv'
     
     # 创建数据预处理器
     print("加载并预处理数据...")
